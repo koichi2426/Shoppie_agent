@@ -21,7 +21,7 @@ def search_products(keyword: str) -> str:
     if response.status_code == 200:
         items = response.json().get("Items", [])
         results = [
-            f"{item['Item']['itemName']} - {item['Item']['affiliateUrl']}"
+            f"{item['Item'].get('itemName', '商品名不明')} - {item['Item'].get('affiliateUrl', 'URLなし')}"
             for item in items[:3]
         ]
         return "\n".join(results) if results else "商品が見つかりませんでした。"
@@ -36,7 +36,7 @@ def get_ranking(genre_id: str = "100283") -> str:
     if response.status_code == 200:
         items = response.json().get("Items", [])
         results = [
-            f"【{item['Item']['rank']}位】{item['Item']['itemName']} - {item['Item']['affiliateUrl']}"
+            f"【{item['Item'].get('rank', '?')}位】{item['Item'].get('itemName', '商品名不明')} - {item['Item'].get('affiliateUrl', 'URLなし')}"
             for item in items[:3]
         ]
         return "\n".join(results) if results else "ランキング情報が見つかりませんでした。"
@@ -51,7 +51,7 @@ def search_genres(keyword: str) -> str:
     if response.status_code == 200:
         genres = response.json().get("children", [])
         results = [
-            f"{genre['child']['genreName']}（ID: {genre['child']['genreId']})"
+            f"{genre['child'].get('genreName', '不明ジャンル')}（ID: {genre['child'].get('genreId', '?')})"
             for genre in genres[:3]
         ]
         return "\n".join(results) if results else "ジャンルが見つかりませんでした。"
@@ -68,7 +68,10 @@ def get_new_arrivals(keyword: str) -> str:
     response = requests.get(url, params=params)
     if response.status_code == 200:
         items = response.json().get("Items", [])
-        results = [f"{item['Item']['itemName']}（更新: {item['Item']['updateTimestamp']}） - {item['Item']['affiliateUrl']}" for item in items[:3]]
+        results = [
+            f"{item['Item'].get('itemName', '商品名不明')}（更新: {item['Item'].get('updateTimestamp', '不明')}） - {item['Item'].get('affiliateUrl', 'URLなし')}"
+            for item in items[:3]
+        ]
         return "\n".join(results) if results else "新着商品が見つかりませんでした。"
     return "新着商品の取得に失敗しました。"
 
@@ -85,8 +88,8 @@ def get_lowest_price(keyword: str) -> str:
         items = response.json().get("Items", [])
         if not items:
             return "最安値の商品が見つかりませんでした。"
-        item = items[0]['Item']
-        return f"最安値: {item['itemName']}（{item['itemPrice']}円） - {item['affiliateUrl']}"
+        item = items[0]["Item"]
+        return f"最安値: {item.get('itemName', '商品名不明')}（{item.get('itemPrice', '?')}円） - {item.get('affiliateUrl', 'URLなし')}"
     return "価格情報の取得に失敗しました。"
 
 # 📝 商品詳細情報を取得（itemCode指定）
@@ -99,8 +102,11 @@ def get_product_detail(item_code: str) -> str:
         items = response.json().get("Items", [])
         if not items:
             return "商品詳細が見つかりませんでした。"
-        item = items[0]['Item']
+        item = items[0]["Item"]
         return (
-            f"{item['itemName']}\n価格: {item['itemPrice']}円\n説明: {item['itemCaption']}\nURL: {item['affiliateUrl']}"
+            f"{item.get('itemName', '商品名不明')}\n"
+            f"価格: {item.get('itemPrice', '?')}円\n"
+            f"説明: {item.get('itemCaption', '説明なし')}\n"
+            f"URL: {item.get('affiliateUrl', 'URLなし')}"
         )
     return "商品詳細の取得に失敗しました。"
