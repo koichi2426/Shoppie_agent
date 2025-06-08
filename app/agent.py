@@ -14,8 +14,15 @@ from app.rakuten_api import (
 )
 from app.memory import memory
 
-load_dotenv()
+# ✅ 明示的に .env を読み込む（プロジェクトルートに .env がある前提）
+dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(dotenv_path)
 
+# ✅ 読み込み確認（開発時のみ。不要になったら削除OK）
+print("AWS_ACCESS_KEY_ID:", os.getenv("AWS_ACCESS_KEY_ID"))
+print("AWS_SECRET_ACCESS_KEY:", os.getenv("AWS_SECRET_ACCESS_KEY"))
+
+# 🛠 楽天ツール定義
 @tool
 def rakuten_search(query: str) -> str:
     """楽天市場で商品を検索します。"""
@@ -46,20 +53,20 @@ def rakuten_product_detail(item_code: str) -> str:
     """指定したitemCodeの商品詳細情報を取得します。"""
     return get_product_detail(item_code)
 
-# Claude 3.5 Haiku を Bedrock 経由で初期化
+# 🤖 Claude 3.5 Haiku（Amazon Bedrock経由）
 llm = BedrockChat(
     model_id="anthropic.claude-3-haiku-20240307",
-    region_name=os.getenv("AWS_REGION")
+    region_name=os.getenv("AWS_REGION"),
 )
 
-# 使用可能なツール一覧
+# 🧠 Agent 初期化
 tools = [
     rakuten_search,
     rakuten_ranking,
     rakuten_genre_search,
     rakuten_new_arrivals,
     rakuten_lowest_price,
-    rakuten_product_detail
+    rakuten_product_detail,
 ]
 
 agent = initialize_agent(
@@ -67,9 +74,10 @@ agent = initialize_agent(
     llm=llm,
     agent=AgentType.OPENAI_FUNCTIONS,
     memory=memory,
-    verbose=True
+    verbose=True,
 )
 
+# 🎯 ユーザー入力を処理する非同期関数
 async def run_agent(user_input: str) -> str:
     try:
         return agent.run(user_input)
