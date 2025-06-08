@@ -2,17 +2,105 @@ import os
 import requests
 
 APP_ID = os.getenv("RAKUTEN_APP_ID")
+AFFILIATE_ID = os.getenv("RAKUTEN_AFFILIATE_ID")
 
-def search_products(keyword: str) -> str:
-    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
-    params = {
+# ✅ 共通パラメータ
+def base_params():
+    return {
         "applicationId": APP_ID,
-        "keyword": keyword,
+        "affiliateId": AFFILIATE_ID,
         "format": "json"
     }
+
+# 🔍 商品検索（キーワード）
+def search_products(keyword: str) -> str:
+    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    params = base_params()
+    params.update({"keyword": keyword})
     response = requests.get(url, params=params)
     if response.status_code == 200:
         items = response.json().get("Items", [])
-        results = [f"{item['Item']['itemName']} - {item['Item']['itemUrl']}" for item in items[:3]]
+        results = [
+            f"{item['Item']['itemName']} - {item['Item']['affiliateUrl']}"
+            for item in items[:3]
+        ]
         return "\n".join(results) if results else "商品が見つかりませんでした。"
-    return "楽天APIからの取得に失敗しました。"
+    return "商品検索に失敗しました。"
+
+# 🏆 売れ筋ランキング（ジャンル指定）
+def get_ranking(genre_id: str = "100283") -> str:
+    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20170628"
+    params = base_params()
+    params.update({"genreId": genre_id})
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        items = response.json().get("Items", [])
+        results = [
+            f"【{item['Item']['rank']}位】{item['Item']['itemName']} - {item['Item']['affiliateUrl']}"
+            for item in items[:3]
+        ]
+        return "\n".join(results) if results else "ランキング情報が見つかりませんでした。"
+    return "ランキング取得に失敗しました。"
+
+# 📚 ジャンル検索（キーワード→候補）
+def search_genres(keyword: str) -> str:
+    url = "https://app.rakuten.co.jp/services/api/IchibaGenre/Search/20140222"
+    params = base_params()
+    params.update({"keyword": keyword})
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        genres = response.json().get("children", [])
+        results = [
+            f"{genre['child']['genreName']}（ID: {genre['child']['genreId']})"
+            for genre in genres[:3]
+        ]
+        return "\n".join(results) if results else "ジャンルが見つかりませんでした。"
+    return "ジャンル検索に失敗しました。"
+
+# 🆕 新着順の商品取得（キーワード）
+def get_new_arrivals(keyword: str) -> str:
+    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    params = base_params()
+    params.update({
+        "keyword": keyword,
+        "sort": "-updateTimestamp"  # 新着順
+    })
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        items = response.json().get("Items", [])
+        results = [f"{item['Item']['itemName']}（更新: {item['Item']['updateTimestamp']}） - {item['Item']['affiliateUrl']}" for item in items[:3]]
+        return "\n".join(results) if results else "新着商品が見つかりませんでした。"
+    return "新着商品の取得に失敗しました。"
+
+# 💰 最安値商品を探す（キーワード）
+def get_lowest_price(keyword: str) -> str:
+    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    params = base_params()
+    params.update({
+        "keyword": keyword,
+        "sort": "+itemPrice"  # 価格昇順
+    })
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        items = response.json().get("Items", [])
+        if not items:
+            return "最安値の商品が見つかりませんでした。"
+        item = items[0]['Item']
+        return f"最安値: {item['itemName']}（{item['itemPrice']}円） - {item['affiliateUrl']}"
+    return "価格情報の取得に失敗しました。"
+
+# 📝 商品詳細情報を取得（itemCode指定）
+def get_product_detail(item_code: str) -> str:
+    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+    params = base_params()
+    params.update({"itemCode": item_code})
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        items = response.json().get("Items", [])
+        if not items:
+            return "商品詳細が見つかりませんでした。"
+        item = items[0]['Item']
+        return (
+            f"{item['itemName']}\n価格: {item['itemPrice']}円\n説明: {item['itemCaption']}\nURL: {item['affiliateUrl']}"
+        )
+    return "商品詳細の取得に失敗しました。"
