@@ -19,10 +19,10 @@ from app.memory import memory
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path)
 
-# ✅ 認証確認（デバッグ用）
+# ✅ 認証確認
 print("✅ BEDROCK Key:", os.getenv("BEDROCK_AWS_ACCESS_KEY_ID"))
 
-# ✅ boto3 client を明示的に構築
+# ✅ boto3 client を構築
 bedrock_client = boto3.client(
     service_name="bedrock-runtime",
     region_name=os.getenv("BEDROCK_AWS_REGION", "us-east-1"),
@@ -37,7 +37,7 @@ llm = ChatBedrock(
     temperature=0.7,
 )
 
-# 🛠 楽天APIツール定義（すべて docstring 付き）
+# 🛠 楽天APIツール定義
 @tool
 def rakuten_search(query: str) -> str:
     """楽天市場で商品を検索します。"""
@@ -78,17 +78,17 @@ tools = [
     rakuten_product_detail,
 ]
 
-# 🧠 Claude向け ReAct型エージェント（パース失敗時の再試行を有効化）
+# 🧠 エージェント初期化（Claude + Memory + ReAct）
 agent = initialize_agent(
     tools=tools,
     llm=llm,
     agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
     memory=memory,
     verbose=True,
-    handle_parsing_errors=True,  # ← ここが重要
+    handle_parsing_errors=True,  # Claudeの出力エラー対策
 )
 
-# 🎯 ユーザー入力を処理する非同期関数（FastAPIなどから呼び出し）
+# 🎯 ユーザー入力を処理する非同期関数
 async def run_agent(user_input: str) -> str:
     try:
         return await agent.arun(user_input)
