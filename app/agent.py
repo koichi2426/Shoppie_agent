@@ -19,7 +19,7 @@ from app.memory import memory
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path)
 
-# ✅ 認証確認（起動時に出力して問題特定用）
+# ✅ 認証確認（デバッグ用）
 print("✅ BEDROCK Key:", os.getenv("BEDROCK_AWS_ACCESS_KEY_ID"))
 
 # ✅ boto3 client を明示的に構築
@@ -78,16 +78,17 @@ tools = [
     rakuten_product_detail,
 ]
 
-# 🧠 Claude 3.5対応Agent初期化（functionsではなくReAct形式を使用）
+# 🧠 Claude向け ReAct型エージェント（パース失敗時の再試行を有効化）
 agent = initialize_agent(
     tools=tools,
     llm=llm,
-    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,  # ← Claude対応済み
+    agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
     memory=memory,
     verbose=True,
+    handle_parsing_errors=True,  # ← ここが重要
 )
 
-# 🎯 ユーザー入力を処理する非同期関数（FastAPIなどから呼び出す）
+# 🎯 ユーザー入力を処理する非同期関数（FastAPIなどから呼び出し）
 async def run_agent(user_input: str) -> str:
     try:
         return await agent.arun(user_input)
