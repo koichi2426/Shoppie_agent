@@ -42,20 +42,28 @@ def get_ranking(genre_id: str = "100283") -> str:
         return "\n".join(results) if results else "ランキング情報が見つかりませんでした。"
     return "ランキング取得に失敗しました。"
 
-# 📚 ジャンル検索（キーワード→候補）
-def search_genres(keyword: str) -> str:
+
+# 🔍 ジャンル検索（キーワード→最初の候補1件）
+def get_genre_id_from_keyword(keyword: str) -> str:
     url = "https://app.rakuten.co.jp/services/api/IchibaGenre/Search/20140222"
     params = base_params()
     params.update({"keyword": keyword})
     response = requests.get(url, params=params)
     if response.status_code == 200:
         genres = response.json().get("children", [])
-        results = [
-            f"{genre['child'].get('genreName', '不明ジャンル')}（ID: {genre['child'].get('genreId', '?')})"
-            for genre in genres[:3]
-        ]
-        return "\n".join(results) if results else "ジャンルが見つかりませんでした。"
-    return "ジャンル検索に失敗しました。"
+        if genres:
+            first_genre = genres[0]["child"]
+            genre_name = first_genre.get("genreName", "不明ジャンル")
+            genre_id = first_genre.get("genreId", "")
+            return genre_id
+    return None
+
+# 🎯 統合ツール：キーワードから売れ筋を取得
+def keyword_to_ranking(keyword: str) -> str:
+    genre_id = get_genre_id_from_keyword(keyword)
+    if genre_id:
+        return get_ranking(genre_id)
+    return "該当ジャンルが見つかりませんでした。"
 
 # 🆕 新着順の商品取得（キーワード）
 def get_new_arrivals(keyword: str) -> str:
