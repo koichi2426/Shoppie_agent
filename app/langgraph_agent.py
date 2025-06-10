@@ -124,10 +124,17 @@ if __name__ == "__main__":
 async def run_agent(user_input: str) -> str:
     app = build_graph()
     events = app.stream({"messages": [HumanMessage(content=user_input)]})
-    final_response = None
+    
+    all_messages = []
+
     for event in events:
         for key, value in event.items():
             for msg in value.get("messages", []):
-                if hasattr(msg, "content"):
-                    final_response = msg.content
-    return final_response or "すみません、適切な商品が見つかりませんでした。"
+                if hasattr(msg, "content") and msg.content:
+                    all_messages.append(f"[{type(msg).__name__}] {msg.content}")
+                elif hasattr(msg, "additional_kwargs") and msg.additional_kwargs:
+                    all_messages.append(f"[{type(msg).__name__}] {msg.additional_kwargs}")
+                else:
+                    all_messages.append(f"[{type(msg).__name__}] {str(msg)}")
+
+    return "\n\n".join(all_messages) if all_messages else "⚠️ メッセージが見つかりませんでした。"
