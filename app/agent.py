@@ -5,7 +5,7 @@ from langchain_aws import ChatBedrock
 from langchain.agents import initialize_agent, Tool
 from langchain.agents.agent_types import AgentType
 from langchain.tools import tool
-from app.rakuten_api import (
+from app.tools.rakuten_api import (
     search_products,
     get_ranking,
     search_genres,
