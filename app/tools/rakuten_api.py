@@ -31,7 +31,7 @@ def search_products(keyword: str) -> str:
                 "title": data.get("itemName", "商品名不明"),
                 "url": data.get("affiliateUrl", "URLなし"),
                 "image": data.get("mediumImageUrls", [{}])[0].get("imageUrl", "画像なし"),
-                "price": f"{data.get('itemPrice', '?')}円",
+                "price": str(int(data.get('itemPrice', 0))),
                 "description": data.get("itemCaption", "説明なし")
             })
         return json.dumps(results, ensure_ascii=False, indent=2) if results else json.dumps({"message": "商品が見つかりませんでした。"}, ensure_ascii=False)
@@ -72,7 +72,7 @@ def keyword_to_ranking_products(keyword: str) -> str:
                 "title": data.get("itemName", "商品名不明"),
                 "url": data.get("affiliateUrl", "URLなし"),
                 "image": data.get("mediumImageUrls", [{}])[0].get("imageUrl", "画像なし"),
-                "price": f"{data.get('itemPrice', '?')}円",
+                "price": str(int(data.get('itemPrice', 0))),
                 "description": data.get("itemCaption", "説明なし")
             })
         return json.dumps(results, ensure_ascii=False, indent=2) if results else json.dumps({"message": "ランキング商品が見つかりませんでした。"}, ensure_ascii=False)
