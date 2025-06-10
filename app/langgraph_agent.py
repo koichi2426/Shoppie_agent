@@ -9,6 +9,7 @@ from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_aws import ChatBedrock
+from langchain_core.messages import HumanMessage
 
 # ✅ 楽天APIのStructuredToolラッパー
 from app.tools.rakuten_tool_wrappers import (
@@ -115,3 +116,18 @@ if __name__ == "__main__":
     events = app.stream({"messages": [("user", user_input)]})
     for event in events:
         print(event)
+
+# -------------------------
+# 🌐 FastAPIから使う関数
+# -------------------------
+
+async def run_agent(user_input: str) -> str:
+    app = build_graph()
+    events = app.stream({"messages": [HumanMessage(content=user_input)]})
+    final_response = None
+    for event in events:
+        for key, value in event.items():
+            for msg in value.get("messages", []):
+                if hasattr(msg, "content"):
+                    final_response = msg.content
+    return final_response or "すみません、適切な商品が見つかりませんでした。"
