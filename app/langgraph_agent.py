@@ -10,6 +10,8 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_aws import ChatBedrock
 from langchain_core.messages import HumanMessage
+import json
+from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
 
 # ✅ 楽天APIのStructuredToolラッパー
 from app.tools.rakuten_tool_wrappers import (
@@ -121,20 +123,32 @@ if __name__ == "__main__":
 # 🌐 FastAPIから使う関数
 # -------------------------
 
-async def run_agent(user_input: str) -> str:
+async def run_agent(user_input: str) -> dict:
     app = build_graph()
     events = app.stream({"messages": [HumanMessage(content=user_input)]})
-    
-    all_messages = []
+
+    tool_calls = []
+    tool_response = []
+    final_response = None
 
     for event in events:
-        for key, value in event.items():
+        for _, value in event.items():
             for msg in value.get("messages", []):
-                if hasattr(msg, "content") and msg.content:
-                    all_messages.append(f"[{type(msg).__name__}] {msg.content}")
-                elif hasattr(msg, "additional_kwargs") and msg.additional_kwargs:
-                    all_messages.append(f"[{type(msg).__name__}] {msg.additional_kwargs}")
-                else:
-                    all_messages.append(f"[{type(msg).__name__}] {str(msg)}")
+                if isinstance(msg, AIMessage) and msg.tool_calls:
+                    tool_calls.extend(msg.tool_calls)
 
-    return "\n\n".join(all_messages) if all_messages else "⚠️ メッセージが見つかりませんでした。"
+                elif isinstance(msg, ToolMessage):
+                    try:
+                        parsed = json.loads(msg.content)
+                        tool_response = parsed if isinstance(parsed, list) else [parsed]
+                    except Exception:
+                        tool_response = [msg.content]
+
+                elif hasattr(msg, "content") and msg.content:
+                    final_response = msg.content
+
+    return {
+        "tool_calls": tool_calls,
+        "tool_response": tool_response,
+        "final_response": final_response or "すみません、応答が得られませんでした。"
+    }
