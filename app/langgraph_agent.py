@@ -123,6 +123,9 @@ if __name__ == "__main__":
 # 🌐 FastAPIから使う関数
 # -------------------------
 
+from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
+import json
+
 async def run_agent(user_input: str) -> dict:
     app = build_graph()
     events = app.stream({"messages": [HumanMessage(content=user_input)]})
@@ -130,12 +133,23 @@ async def run_agent(user_input: str) -> dict:
     tool_calls = []
     tool_response = []
     final_response = None
+    raw_events = []
 
     for event in events:
+        # 🌟 rawイベントログを文字列化して保存
+        try:
+            raw_events.append(json.loads(json.dumps(event, default=str)))
+        except Exception:
+            raw_events.append(str(event))
+
+        # メッセージの抽出処理
         for _, value in event.items():
             for msg in value.get("messages", []):
-                if isinstance(msg, AIMessage) and msg.tool_calls:
-                    tool_calls.extend(msg.tool_calls)
+                if isinstance(msg, AIMessage):
+                    if msg.tool_calls:
+                        tool_calls.extend([call.dict() for call in msg.tool_calls])
+                    if msg.content:
+                        final_response = msg.content
 
                 elif isinstance(msg, ToolMessage):
                     try:
@@ -150,5 +164,6 @@ async def run_agent(user_input: str) -> dict:
     return {
         "tool_calls": tool_calls,
         "tool_response": tool_response,
-        "final_response": final_response or "すみません、応答が得られませんでした。"
+        "final_response": final_response or "すみません、応答が得られませんでした。",
+        "events_raw": raw_events  # 🌟 追加出力
     }
