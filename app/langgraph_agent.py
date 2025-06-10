@@ -9,9 +9,8 @@ from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_aws import ChatBedrock
-from langchain_core.messages import HumanMessage
-import json
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
+import json
 
 # ✅ 楽天APIのStructuredToolラッパー
 from app.tools.rakuten_tool_wrappers import (
@@ -122,10 +121,6 @@ if __name__ == "__main__":
 # -------------------------
 # 🌐 FastAPIから使う関数
 # -------------------------
-
-from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
-import json
-
 async def run_agent(user_input: str) -> dict:
     app = build_graph()
     events = app.stream({"messages": [HumanMessage(content=user_input)]})
