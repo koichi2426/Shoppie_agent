@@ -125,40 +125,23 @@ async def run_agent(user_input: str) -> dict:
     app = build_graph()
     events = app.stream({"messages": [HumanMessage(content=user_input)]})
 
-    tool_calls = []
-    tool_response = []
-    final_response = None
-    raw_events = []
+    complete_raw_events = []  # 🌟 完全な生データ用
+    parsed_tool_content = None  # 🌟 パースされたツール結果
 
     for event in events:
-        # 🌟 rawイベントログを文字列化して保存
-        try:
-            raw_events.append(json.loads(json.dumps(event, default=str)))
-        except Exception:
-            raw_events.append(str(event))
-
-        # メッセージの抽出処理
-        for _, value in event.items():
-            for msg in value.get("messages", []):
-                if isinstance(msg, AIMessage):
-                    if msg.tool_calls:
-                        tool_calls.extend([call.dict() for call in msg.tool_calls])
-                    if msg.content:
-                        final_response = msg.content
-
-                elif isinstance(msg, ToolMessage):
+        # 🌟 完全な生データを一切パースせずに保存
+        complete_raw_events.append(event)
+        
+        # 🌟 toolノードのToolMessage.contentだけ別途パース
+        if "tool" in event:
+            for msg in event["tool"].get("messages", []):
+                if isinstance(msg, ToolMessage):
                     try:
-                        parsed = json.loads(msg.content)
-                        tool_response = parsed if isinstance(parsed, list) else [parsed]
+                        parsed_tool_content = json.loads(msg.content)
                     except Exception:
-                        tool_response = [msg.content]
-
-                elif hasattr(msg, "content") and msg.content:
-                    final_response = msg.content
+                        parsed_tool_content = msg.content
 
     return {
-        "tool_calls": tool_calls,
-        "tool_response": tool_response,
-        "final_response": final_response or "すみません、応答が得られませんでした。",
-        "events_raw": raw_events  # 🌟 追加出力
+        "complete_raw_events": complete_raw_events,  # 🌟 完全な生データ（オブジェクトそのまま）
+        "parsed_tool_content": parsed_tool_content   # 🌟 パースされたツール結果
     }
