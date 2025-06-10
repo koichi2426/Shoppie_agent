@@ -13,14 +13,16 @@ def base_params():
         "format": "json"
     }
 
-# 🔍 商品検索（キーワード → 商品情報を10件）
-def search_products(keyword: str) -> str:
+# 🔍 条件付き商品検索（キーワード → 商品情報を10件）
+def search_products_with_filters(keyword: str, filters: dict) -> str:
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
     params = base_params()
     params.update({
         "keyword": keyword,
         "hits": 10
     })
+    params.update(filters)  # 🔍 追加条件を反映
+
     response = requests.get(url, params=params)
     if response.status_code == 200:
         items = response.json().get("Items", [])

@@ -6,12 +6,8 @@ from langchain.agents import initialize_agent, Tool
 from langchain.agents.agent_types import AgentType
 from langchain.tools import tool
 from app.tools.rakuten_api import (
-    search_products,
-    get_ranking,
-    search_genres,
-    get_new_arrivals,
-    get_lowest_price,
-    get_product_detail,
+    search_products_with_filters,
+    keyword_to_ranking_products,
 )
 from app.memory import memory
 
@@ -39,43 +35,44 @@ llm = ChatBedrock(
 
 # 🛠 楽天APIツール定義
 @tool
-def rakuten_search(query: str) -> str:
-    """楽天市場で商品を検索します。"""
-    return search_products(query)
+def rakuten_search_with_filters(input: dict) -> str:
+    """
+    楽天市場でキーワードと条件を指定して商品を検索します。
+
+    🔸 input は以下の形式の辞書です:
+    {
+        "keyword": "検索キーワード（例：ノートパソコン）",
+        "filters": {
+            "minPrice": 最低価格（例:3000）,         # 任意
+            "maxPrice": 最高価格（例:10000）,        # 任意
+            "postageFree": 1 で送料無料のみに限定,     # 任意
+            "availability": 1 で在庫ありのみに限定,   # 任意
+            "sort": 並び順（以下のいずれか）             # 任意
+                - +itemPrice（価格が安い順）
+                - -itemPrice（価格が高い順）
+                - +reviewCount（レビュー件数が少ない順）
+                - -reviewCount（レビュー件数が多い順）
+                - +reviewAverage（レビュー評価が低い順）
+                - -reviewAverage（レビュー評価が高い順）
+                - +affiliateRate（報酬率が低い順）
+                - -affiliateRate（報酬率が高い順）
+        }
+    }
+
+    🔹 filters が指定されない場合、通常検索として動作します。
+    """
+    return search_products_with_filters(input["keyword"], input.get("filters", {}))
+
 
 @tool
-def rakuten_ranking(genre_id: str = "100283") -> str:
-    """楽天市場の人気ランキングを取得します（ジャンルID指定）。"""
-    return get_ranking(genre_id)
-
-@tool
-def rakuten_genre_search(keyword: str) -> str:
-    """キーワードに関連する楽天ジャンルを検索します。"""
-    return search_genres(keyword)
-
-@tool
-def rakuten_new_arrivals(keyword: str) -> str:
-    """指定したキーワードで新着商品を検索します。"""
-    return get_new_arrivals(keyword)
-
-@tool
-def rakuten_lowest_price(keyword: str) -> str:
-    """指定したキーワードで最安値の商品を検索します。"""
-    return get_lowest_price(keyword)
-
-@tool
-def rakuten_product_detail(item_code: str) -> str:
-    """指定したitemCodeの商品詳細情報を取得します。"""
-    return get_product_detail(item_code)
+def rakuten_ranking_from_keyword(keyword: str) -> str:
+    """楽天市場でキーワードからジャンルを推定し、そのジャンルの売れ筋ランキングを取得します。"""
+    return keyword_to_ranking_products(keyword)
 
 # 🔧 利用するツール一覧
 tools = [
-    rakuten_search,
-    rakuten_ranking,
-    rakuten_genre_search,
-    rakuten_new_arrivals,
-    rakuten_lowest_price,
-    rakuten_product_detail,
+    rakuten_search_with_filters,
+    rakuten_ranking_from_keyword,
 ]
 
 # 🧠 エージェント初期化（Claude + Memory + ReAct）
@@ -85,7 +82,7 @@ agent = initialize_agent(
     agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
     memory=memory,
     verbose=True,
-    handle_parsing_errors=True,  # Claudeの出力エラー対策
+    handle_parsing_errors=True,
 )
 
 # 🎯 ユーザー入力を処理する非同期関数
