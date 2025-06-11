@@ -9,7 +9,7 @@ AFFILIATE_ID = os.getenv("YAHOO_AFFILIATE_ID")
 def base_params():
     params = {
         "appid": APP_ID,
-        "results": 10,
+        "results": 50,
         "in_stock": "true",
         "image_size": 600  # ✅ 大きな画像を取得する指定を追加
     }
@@ -18,7 +18,7 @@ def base_params():
         params["affiliate_id"] = AFFILIATE_ID
     return params
 
-# 🔍 条件付き商品検索（キーワード → 商品情報を10件）
+# 🔍 条件付き商品検索（キーワード → 商品情報を50件）
 def search_products_with_filters(keyword: str, filters: dict) -> str:
     url = "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch"
     params = base_params()
