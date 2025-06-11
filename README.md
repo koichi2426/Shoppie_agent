@@ -12,8 +12,7 @@ Shoppie\_agentは、ユーザーの発言を自然言語で受け取り、LangCh
 
 ## システム構成図
 
-![image](https://github.com/user-attachments/assets/dd484e3f-bbef-46c2-b8c8-783150af87a9)
-
+![image](https://github.com/user-attachments/assets/5c0a99e9-f398-4b90-a4ea-ef56700a1ef0)
 
 ---
 
