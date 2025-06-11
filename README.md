@@ -12,7 +12,8 @@ Shoppie\_agentは、ユーザーの発言を自然言語で受け取り、LangCh
 
 ## システム構成図
 
-![Shoppie Agent Architecture](https://github.com/user-attachments/assets/cd7f62fc-b91e-4e53-be21-2220338c0a2e)
+![image](https://github.com/user-attachments/assets/dd484e3f-bbef-46c2-b8c8-783150af87a9)
+
 
 ---
 
@@ -25,8 +26,7 @@ Shoppie\_agentは、ユーザーの発言を自然言語で受け取り、LangCh
 
 2. **思考判断（LangChain + Claude 3.5 Haiku）**
 
-   * Memory（過去の会話・状態）を参照しながら、LLMが「どのツールをどう実行すべきか」を判断。
-   * 楽天API等のツールを実行。
+   * LLMはMemoryを参照しながら、適切なツールの選択と、必要な入力形式への整形を行い、自動でツールを実行。
 
 3. **ツール実行と繰り返し思考**
 
