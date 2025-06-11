@@ -1,5 +1,6 @@
 import os
 import boto3
+import time
 from dotenv import load_dotenv
 from typing_extensions import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
@@ -36,7 +37,7 @@ llm = ChatBedrock(
     model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
     client=bedrock_client,
     temperature=0.7,
-    max_tokens=256,
+    max_tokens=1024,  # 🔽 過剰出力を防ぐため制限
     model_kwargs={
         "system": """
 あなたは楽天市場のショッピングアシスタントです。店頭でお客様をお迎えするような気持ちで、親切で丁寧な対応をお願いします。
@@ -116,38 +117,49 @@ graph_app = build_graph()
 # 🚀 実行関数（FastAPIなどから呼ばれる）
 # -------------------------
 async def run_agent(user_input: str, thread_id: str = "default") -> dict:
-    # 既存メモリから取得（stateにmessagesがなければ空リスト）
     checkpoint = memory.get({"configurable": {"thread_id": thread_id}})
     past_messages = checkpoint.get("state", {}).get("messages", []) if checkpoint else []
 
-    # HumanMessage のみ抽出
+    # 🔽 HumanMessage のみ抽出
     human_messages = [m for m in past_messages if isinstance(m, HumanMessage)]
     human_messages.append(HumanMessage(content=user_input))
 
-    # エージェント実行（HumanMessageのみ渡す）
-    events = graph_app.stream(
-        {"messages": human_messages},
-        {"configurable": {"thread_id": thread_id}},
-    )
+    # 🔁 Claude 呼び出しリトライ付き
+    def run_with_retry():
+        delay = 1
+        for _ in range(5):
+            try:
+                return list(graph_app.stream(
+                    {"messages": human_messages},
+                    {"configurable": {"thread_id": thread_id}},
+                ))
+            except Exception as e:
+                if "ThrottlingException" in str(e):
+                    time.sleep(delay)
+                    delay *= 2
+                else:
+                    raise e
+        raise RuntimeError("Claude API throttled after multiple retries.")
 
     complete_raw_events = []
     parsed_tool_content = None
 
-    for event in events:
-        complete_raw_events.append(event)
-        if "tool" in event:
-            for msg in event["tool"].get("messages", []):
-                try:
-                    parsed_tool_content = json.loads(msg.content)
-                except Exception:
-                    parsed_tool_content = msg.content
+    try:
+        for event in run_with_retry():
+            complete_raw_events.append(event)
+            if "tool" in event:
+                for msg in event["tool"].get("messages", []):
+                    try:
+                        parsed_tool_content = json.loads(msg.content)
+                    except Exception:
+                        parsed_tool_content = msg.content
+    except Exception as e:
+        return {"error": str(e)}
 
     return {
         "complete_raw_events": complete_raw_events,
         "parsed_tool_content": parsed_tool_content
     }
-
-
 
 # -------------------------
 # ✅ メモリ状態取得ユーティリティ
