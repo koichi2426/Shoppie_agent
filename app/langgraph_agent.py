@@ -97,16 +97,25 @@ memory = MemorySaver()
 # ----------------------------
 def build_graph():
     graph = StateGraph(State)
+
+    # ノード定義
     graph.add_node("llm_agent", llm_node)
     graph.add_node("tool", tool_node)
-    graph.add_edge(START, "llm_agent")  # スタート → LLMノード
+
+    # スタート → Claude（llm_agent）
+    graph.add_edge(START, "llm_agent")
+
+    # Claudeの出力に応じて分岐
     graph.add_conditional_edges("llm_agent", tools_condition, {
-        "tools": "tool",      # ツールが必要なとき → toolノードへ
-        "__end__": END        # それ以外は終了
+        "tools": "tool",   # Claudeがツールを使う → toolノードへ
+        "__end__": END     # ツール不要 → 終了
     })
-    graph.add_edge("tool", "llm_agent")  # ツール実行後にLLMに戻る
-    graph.add_edge("llm_agent", END)     # 条件を満たせば終了
+
+    # ✅ ツール実行後はClaudeに戻さず、直接終了
+    graph.add_edge("tool", END)
+
     return graph.compile(checkpointer=memory)
+
 
 # グラフをビルドしてインスタンス化
 graph_app = build_graph()
