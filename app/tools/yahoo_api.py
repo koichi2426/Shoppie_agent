@@ -10,7 +10,8 @@ def base_params():
     params = {
         "appid": APP_ID,
         "results": 10,
-        "in_stock": "true"
+        "in_stock": "true",
+        "image_size": 600  # ✅ 大きな画像を取得する指定を追加
     }
     if AFFILIATE_ID:
         params["affiliate_type"] = "vc"
@@ -34,7 +35,7 @@ def search_products_with_filters(keyword: str, filters: dict) -> str:
             results.append({
                 "title": item.get("name", "商品名不明"),
                 "url": item.get("url", "URLなし"),
-                "image": item.get("image", {}).get("medium", "画像なし"),
+                "image": item.get("exImage", {}).get("url", "画像なし"),  # ✅ medium → exImage.url に変更
                 "price": str(item.get("price", "不明")),
                 "description": item.get("description", "説明なし")
             })
