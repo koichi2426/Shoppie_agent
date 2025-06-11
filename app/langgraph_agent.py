@@ -10,6 +10,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_aws import ChatBedrock
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
 import json
 
 # ✅ 楽天APIのStructuredToolラッパー
@@ -36,7 +37,9 @@ llm = ChatBedrock(
     model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
     client=bedrock_client,
     temperature=0.7,
-    system="""
+    max_tokens=512,  # ← スロットリング防止のために追加
+    model_kwargs={    # ← systemプロンプトはここに移動
+        "system": """
 あなたは楽天市場のショッピングアシスタントです。店頭でお客様をお迎えするような気持ちで、親切で丁寧な対応をお願いします。
 
 お客様のご要望にお応えする際は、必ず以下の専用ツールをご利用ください：
@@ -54,6 +57,7 @@ llm = ChatBedrock(
 
 何かお探しの商品がございましたら、お気軽にお申し付けください！
 """
+    }
 )
 
 # -------------------------
@@ -95,16 +99,15 @@ def build_graph():
     graph.add_node("tool", tool_node)
 
     graph.add_edge(START, "llm_agent")
-
     graph.add_conditional_edges("llm_agent", tools_condition, {
         "tools": "tool",
         "__end__": END
     })
-
     graph.add_edge("tool", "llm_agent")
     graph.add_edge("llm_agent", END)
 
-    return graph.compile()
+    # ✅ メモリ保存機能を追加
+    return graph.compile(checkpointer=memory)
 
 # -------------------------
 # 🚀 実行テスト
@@ -120,18 +123,20 @@ if __name__ == "__main__":
 # -------------------------
 # 🌐 FastAPIから使う関数
 # -------------------------
-async def run_agent(user_input: str) -> dict:
+async def run_agent(user_input: str, thread_id: str = "default") -> dict:
     app = build_graph()
-    events = app.stream({"messages": [HumanMessage(content=user_input)]})
 
-    complete_raw_events = []  # 🌟 完全な生データ用
-    parsed_tool_content = None  # 🌟 パースされたツール結果
+    # ✅ thread_id に基づいて状態を継続
+    events = app.stream(
+        {"messages": [HumanMessage(content=user_input)]},
+        {"configurable": {"thread_id": thread_id}},
+    )
+
+    complete_raw_events = []
+    parsed_tool_content = None
 
     for event in events:
-        # 🌟 完全な生データを一切パースせずに保存
         complete_raw_events.append(event)
-        
-        # 🌟 toolノードのToolMessage.contentだけ別途パース
         if "tool" in event:
             for msg in event["tool"].get("messages", []):
                 if isinstance(msg, ToolMessage):
@@ -141,6 +146,9 @@ async def run_agent(user_input: str) -> dict:
                         parsed_tool_content = msg.content
 
     return {
-        "complete_raw_events": complete_raw_events,  # 🌟 完全な生データ（オブジェクトそのまま）
-        "parsed_tool_content": parsed_tool_content   # 🌟 パースされたツール結果
+        "complete_raw_events": complete_raw_events,
+        "parsed_tool_content": parsed_tool_content
     }
+
+# ✅ MemorySaver インスタンスを生成（アプリ全体で共通に使用）
+memory = MemorySaver()
