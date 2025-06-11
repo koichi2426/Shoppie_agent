@@ -1,9 +1,12 @@
+# ----------------------------
+# 必要なライブラリをインポート
+# ----------------------------
 import os
-import boto3
+import boto3  # AWSサービス用クライアントライブラリ
 import time
 import json
 from typing_extensions import Annotated, TypedDict
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # .envファイルから環境変数を読み込む
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -13,16 +16,23 @@ from langchain_aws import ChatBedrock
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.base import Checkpoint
 
-# ✅ StructuredToolラッパー
+# ----------------------------
+# 楽天API用のStructuredToolをインポート
+# ----------------------------
 from app.tools.rakuten_tool_wrappers import (
-    search_products_with_filters_tool,
-    keyword_to_ranking_products_tool
+    search_products_with_filters_tool,     # 商品検索（フィルターあり）
+    keyword_to_ranking_products_tool       # キーワードからランキング取得
 )
 
-# ✅ .env読込 & Bedrockクライアント設定
+# ----------------------------
+# .envファイルを読み込む
+# ----------------------------
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path)
 
+# ----------------------------
+# AWS Bedrockクライアントの初期化
+# ----------------------------
 bedrock_client = boto3.client(
     service_name="bedrock-runtime",
     region_name=os.getenv("BEDROCK_AWS_REGION", "us-east-1"),
@@ -30,6 +40,9 @@ bedrock_client = boto3.client(
     aws_secret_access_key=os.getenv("BEDROCK_AWS_SECRET_ACCESS_KEY"),
 )
 
+# ----------------------------
+# Claude (Bedrock) をLangChain経由で使えるように設定
+# ----------------------------
 llm = ChatBedrock(
     model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
     client=bedrock_client,
@@ -45,14 +58,19 @@ llm = ChatBedrock(
     }
 )
 
-# ✅ LangGraphステート定義
+# ----------------------------
+# LangGraphで使うステート（状態）の型定義
+# ----------------------------
 class State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
 
+# ----------------------------
+# Claudeにプロンプトとメッセージ履歴を渡して実行するノード
+# ----------------------------
 def llm_node(state: State):
     prompt = ChatPromptTemplate.from_messages([
         ("system", "楽天ショッピングアシスタントとして、必ずStructuredToolを使って応答してください。"),
-        MessagesPlaceholder(variable_name="messages")
+        MessagesPlaceholder(variable_name="messages")  # 会話履歴をプロンプトに挿入
     ])
     agent = prompt | llm.bind_tools([
         search_products_with_filters_tool,
@@ -61,36 +79,51 @@ def llm_node(state: State):
     result = agent.invoke(state)
     return {"messages": result}
 
+# ----------------------------
+# StructuredToolノードの定義（ツール実行専用）
+# ----------------------------
 tool_node = ToolNode([
     search_products_with_filters_tool,
     keyword_to_ranking_products_tool
 ])
 
-# ✅ メモリ定義（人間の発言のみ使用）
+# ----------------------------
+# チェックポイント（会話の履歴）を記憶するメモリ
+# ----------------------------
 memory = MemorySaver()
 
+# ----------------------------
+# グラフ構築関数（LangGraphの状態遷移定義）
+# ----------------------------
 def build_graph():
     graph = StateGraph(State)
     graph.add_node("llm_agent", llm_node)
     graph.add_node("tool", tool_node)
-    graph.add_edge(START, "llm_agent")
+    graph.add_edge(START, "llm_agent")  # スタート → LLMノード
     graph.add_conditional_edges("llm_agent", tools_condition, {
-        "tools": "tool",
-        "__end__": END
+        "tools": "tool",      # ツールが必要なとき → toolノードへ
+        "__end__": END        # それ以外は終了
     })
-    graph.add_edge("tool", "llm_agent")
-    graph.add_edge("llm_agent", END)
+    graph.add_edge("tool", "llm_agent")  # ツール実行後にLLMに戻る
+    graph.add_edge("llm_agent", END)     # 条件を満たせば終了
     return graph.compile(checkpointer=memory)
 
+# グラフをビルドしてインスタンス化
 graph_app = build_graph()
 
-# ✅ 実行関数（人間の発話のみ保存）
+# ----------------------------
+# ユーザー入力を受け取り、グラフを非同期で実行する関数
+# ----------------------------
 async def run_agent(user_input: str, thread_id: str = "default") -> dict:
+    # 以前の会話履歴を取得（thread_idごと）
     checkpoint = memory.get({"configurable": {"thread_id": thread_id}})
     past_messages = checkpoint.get("state", {}).get("messages", []) if checkpoint else []
+
+    # ユーザーの入力をメッセージとして追加
     human_messages = [m for m in past_messages if isinstance(m, HumanMessage)]
     human_messages.append(HumanMessage(content=user_input))
 
+    # API制限（スロットリング）時のリトライ処理
     def run_with_retry():
         delay = 1
         for _ in range(5):
@@ -102,7 +135,7 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
             except Exception as e:
                 if "ThrottlingException" in str(e):
                     time.sleep(delay)
-                    delay *= 2
+                    delay *= 2  # リトライごとに待機時間を倍増
                 else:
                     raise e
         raise RuntimeError("Claude API throttled after multiple retries.")
@@ -113,6 +146,7 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
     try:
         for event in run_with_retry():
             complete_raw_events.append(event)
+            # ツール実行のレスポンスを解析（JSON or テキスト）
             if "tool" in event:
                 for msg in event["tool"].get("messages", []):
                     try:
@@ -122,11 +156,14 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
     except Exception as e:
         return {"response": {"error": str(e)}}
 
+    # 実行結果を返す
     return {
         "complete_raw_events": complete_raw_events,
         "parsed_tool_content": parsed_tool_content
     }
 
-# ✅ メモリ取得ユーティリティ
+# ----------------------------
+# 現在の会話履歴（メモリ）を取得するユーティリティ関数
+# ----------------------------
 def get_memory_state(thread_id: str):
     return memory.get({"configurable": {"thread_id": thread_id}})
