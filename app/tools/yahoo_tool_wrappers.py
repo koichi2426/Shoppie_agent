@@ -17,7 +17,7 @@ class YahooSearchProductInput(BaseModel):
 @tool(args_schema=YahooSearchProductInput)
 def search_yahoo_products_with_filters_tool(keyword: str, filters: YahooFiltersModel) -> dict:
     """
-    Yahoo!ショッピングで条件付き商品検索（最大10件）を行います。
+    Yahoo!ショッピングで条件付き商品検索（最大50件）を行います。
     """
     result_json = yahoo_api.search_products_with_filters(keyword, filters.dict())
     return json.loads(result_json)
