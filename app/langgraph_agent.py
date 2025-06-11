@@ -116,17 +116,17 @@ graph_app = build_graph()
 # 🚀 実行関数（FastAPIなどから呼ばれる）
 # -------------------------
 async def run_agent(user_input: str, thread_id: str = "default") -> dict:
-    # 過去メッセージを取得（存在しなければ空リスト）
+    # 既存メモリから取得（stateにmessagesがなければ空リスト）
     checkpoint = memory.get({"configurable": {"thread_id": thread_id}})
-    past_messages = checkpoint.state.get("messages", []) if checkpoint else []
+    past_messages = checkpoint.get("state", {}).get("messages", []) if checkpoint else []
 
-    # 最新5件だけ取得
-    limited_messages = past_messages[-5:] if len(past_messages) > 5 else past_messages
-    limited_messages.append(HumanMessage(content=user_input))  # 新しい入力を追加
+    # HumanMessage のみ抽出
+    human_messages = [m for m in past_messages if isinstance(m, HumanMessage)]
+    human_messages.append(HumanMessage(content=user_input))
 
-    # エージェント実行
+    # エージェント実行（HumanMessageのみ渡す）
     events = graph_app.stream(
-        {"messages": limited_messages},
+        {"messages": human_messages},
         {"configurable": {"thread_id": thread_id}},
     )
 
@@ -137,16 +137,16 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
         complete_raw_events.append(event)
         if "tool" in event:
             for msg in event["tool"].get("messages", []):
-                if isinstance(msg, ToolMessage):
-                    try:
-                        parsed_tool_content = json.loads(msg.content)
-                    except Exception:
-                        parsed_tool_content = msg.content
+                try:
+                    parsed_tool_content = json.loads(msg.content)
+                except Exception:
+                    parsed_tool_content = msg.content
 
     return {
         "complete_raw_events": complete_raw_events,
         "parsed_tool_content": parsed_tool_content
     }
+
 
 
 # -------------------------
