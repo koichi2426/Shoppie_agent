@@ -32,7 +32,7 @@ def search_products_with_filters(keyword: str, filters: dict) -> str:
             results.append({
                 "title": data.get("itemName", "商品名不明"),
                 "url": data.get("affiliateUrl", "URLなし"),
-                "image": data.get("mediumImageUrls", [{}])[0].get("imageUrl", "画像なし"),
+                "image": data.get("mediumImageUrls", [{}])[0].get("imageUrl", "画像なし").replace("_ex=128x128", "_ex=250x250"),
                 "price": str(int(data.get('itemPrice', 0))),
                 "description": data.get("itemCaption", "説明なし")
             })
@@ -73,7 +73,7 @@ def keyword_to_ranking_products(keyword: str) -> str:
             results.append({
                 "title": data.get("itemName", "商品名不明"),
                 "url": data.get("affiliateUrl", "URLなし"),
-                "image": data.get("mediumImageUrls", [{}])[0].get("imageUrl", "画像なし"),
+                "image": data.get("mediumImageUrls", [{}])[0].get("imageUrl", "画像なし").replace("_ex=128x128", "_ex=250x250"),
                 "price": str(int(data.get('itemPrice', 0))),
                 "description": data.get("itemCaption", "説明なし")
             })
