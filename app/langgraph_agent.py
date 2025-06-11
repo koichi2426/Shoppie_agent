@@ -1,5 +1,3 @@
-# langgraph_agent.py
-
 import os
 import boto3
 from dotenv import load_dotenv
@@ -12,6 +10,7 @@ from langchain_aws import ChatBedrock
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 import json
+from langgraph.checkpoint.base import Checkpoint
 
 # ✅ 楽天APIのStructuredToolラッパー
 from app.tools.rakuten_tool_wrappers import (
@@ -37,8 +36,8 @@ llm = ChatBedrock(
     model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
     client=bedrock_client,
     temperature=0.7,
-    max_tokens=512,  # ← スロットリング防止のために追加
-    model_kwargs={    # ← systemプロンプトはここに移動
+    max_tokens=256,
+    model_kwargs={
         "system": """
 あなたは楽天市場のショッピングアシスタントです。店頭でお客様をお迎えするような気持ちで、親切で丁寧な対応をお願いします。
 
@@ -90,14 +89,17 @@ tool_node = ToolNode([
 ])
 
 # -------------------------
-# 🧠 LangGraph構築
+# 💾 MemorySaverインスタンス（グローバル）
+# -------------------------
+memory = MemorySaver()
+
+# -------------------------
+# 🌐 LangGraph構築関数
 # -------------------------
 def build_graph():
     graph = StateGraph(State)
-
     graph.add_node("llm_agent", llm_node)
     graph.add_node("tool", tool_node)
-
     graph.add_edge(START, "llm_agent")
     graph.add_conditional_edges("llm_agent", tools_condition, {
         "tools": "tool",
@@ -105,30 +107,26 @@ def build_graph():
     })
     graph.add_edge("tool", "llm_agent")
     graph.add_edge("llm_agent", END)
-
-    # ✅ メモリ保存機能を追加
     return graph.compile(checkpointer=memory)
 
-# -------------------------
-# 🚀 実行テスト
-# -------------------------
-if __name__ == "__main__":
-    app = build_graph()
-    print("🛍️ Shoppieエージェントへようこそ！")
-    user_input = input("ユーザーの発話を入力してください：")
-    events = app.stream({"messages": [("user", user_input)]})
-    for event in events:
-        print(event)
+# ✅ グラフを一度だけ構築
+graph_app = build_graph()
 
 # -------------------------
-# 🌐 FastAPIから使う関数
+# 🚀 実行関数（FastAPIなどから呼ばれる）
 # -------------------------
 async def run_agent(user_input: str, thread_id: str = "default") -> dict:
-    app = build_graph()
+    # 過去メッセージを取得（存在しなければ空リスト）
+    checkpoint = memory.get({"configurable": {"thread_id": thread_id}})
+    past_messages = checkpoint.state.get("messages", []) if checkpoint else []
 
-    # ✅ thread_id に基づいて状態を継続
-    events = app.stream(
-        {"messages": [HumanMessage(content=user_input)]},
+    # 最新5件だけ取得
+    limited_messages = past_messages[-5:] if len(past_messages) > 5 else past_messages
+    limited_messages.append(HumanMessage(content=user_input))  # 新しい入力を追加
+
+    # エージェント実行
+    events = graph_app.stream(
+        {"messages": limited_messages},
         {"configurable": {"thread_id": thread_id}},
     )
 
@@ -150,5 +148,9 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
         "parsed_tool_content": parsed_tool_content
     }
 
-# ✅ MemorySaver インスタンスを生成（アプリ全体で共通に使用）
-memory = MemorySaver()
+
+# -------------------------
+# ✅ メモリ状態取得ユーティリティ
+# -------------------------
+def get_memory_state(thread_id: str):
+    return memory.get({"configurable": {"thread_id": thread_id}})
