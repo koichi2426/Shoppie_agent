@@ -8,7 +8,7 @@ import json
 import random
 from typing_extensions import Annotated, TypedDict
 from dotenv import load_dotenv
-from botocore.config import Config  # ✅ 追加
+from botocore.config import Config
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -21,7 +21,7 @@ from langgraph.checkpoint.memory import MemorySaver
 # Claude用トークン数の概算カウント
 # ----------------------------
 def count_tokens(text: str) -> int:
-    return int(len(text) / 4) + 1  # 簡易なClaude向け概算
+    return int(len(text) / 4) + 1
 
 def truncate_messages(messages, max_tokens=1000):
     total = 0
@@ -49,19 +49,14 @@ dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path)
 
 # ----------------------------
-# AWS Bedrockクライアントの初期化（✅ retry設定を追加）
+# AWS Bedrockクライアントの初期化
 # ----------------------------
 bedrock_client = boto3.client(
     service_name="bedrock-runtime",
     region_name=os.getenv("BEDROCK_AWS_REGION", "us-east-1"),
     aws_access_key_id=os.getenv("BEDROCK_AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("BEDROCK_AWS_SECRET_ACCESS_KEY"),
-    config=Config(
-        retries={
-            "max_attempts": 6,
-            "mode": "adaptive"
-        }
-    )
+    config=Config(retries={"max_attempts": 6, "mode": "adaptive"})
 )
 
 # ----------------------------
@@ -71,7 +66,7 @@ llm = ChatBedrock(
     model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
     client=bedrock_client,
     temperature=0.7,
-    max_tokens=512,  # 安全圏に調整
+    max_tokens=512,
     model_kwargs={
         "system": """
 あなたはショッピングアシスタントです。店頭でお客様をお迎えするような気持ちで、親切で丁寧な対応をお願いします。
@@ -137,8 +132,7 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
     checkpoint = memory.get({"configurable": {"thread_id": thread_id}})
     past_messages = checkpoint.get("state", {}).get("messages", []) if checkpoint else []
 
-    # 🔒 トークン制限付きで履歴をトリミング
-    limited_past = truncate_messages(past_messages)
+    limited_past = truncate_messages([m for m in past_messages if isinstance(m, HumanMessage)])
     limited_past.append(HumanMessage(content=user_input))
     human_messages = limited_past
 
@@ -183,3 +177,20 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
 # ----------------------------
 def get_memory_state(thread_id: str):
     return memory.get({"configurable": {"thread_id": thread_id}})
+
+# ----------------------------
+# メモリデバッグ表示関数
+# ----------------------------
+def debug_memory(thread_id: str = "default"):
+    checkpoint = memory.get({"configurable": {"thread_id": thread_id}})
+    print(f"\n🧠 Debug: Memory contents for thread_id='{thread_id}'")
+    if checkpoint:
+        messages = checkpoint.get("state", {}).get("messages", [])
+        for i, m in enumerate(messages):
+            if isinstance(m, HumanMessage):
+                print(f"[{i}] HumanMessage: {m.content}")
+            else:
+                print(f"[{i}] Skipped non-HumanMessage ({type(m).__name__})")
+    else:
+        print("No memory found for this thread.")
+    print("-" * 40)
