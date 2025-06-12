@@ -85,7 +85,7 @@ tool_node = ToolNode([
 # ----------------------------
 # チェックポイントメモリ定義
 # ----------------------------
-memory = MemorySaver(max_token_limit=1000)
+memory = MemorySaver()
 
 # ----------------------------
 # グラフ構築関数
