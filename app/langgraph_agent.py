@@ -8,6 +8,7 @@ import json
 import random
 from typing_extensions import Annotated, TypedDict
 from dotenv import load_dotenv
+from botocore.config import Config  # ✅ 追加
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import AnyMessage, add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -20,8 +21,7 @@ from langgraph.checkpoint.memory import MemorySaver
 # Claude用トークン数の概算カウント
 # ----------------------------
 def count_tokens(text: str) -> int:
-    # Claude 3 Haiku 想定で1単語≒1.5トークン換算（超簡易）
-    return int(len(text) / 4) + 1
+    return int(len(text) / 4) + 1  # 簡易なClaude向け概算
 
 def truncate_messages(messages, max_tokens=1000):
     total = 0
@@ -49,13 +49,19 @@ dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path)
 
 # ----------------------------
-# AWS Bedrockクライアントの初期化
+# AWS Bedrockクライアントの初期化（✅ retry設定を追加）
 # ----------------------------
 bedrock_client = boto3.client(
     service_name="bedrock-runtime",
     region_name=os.getenv("BEDROCK_AWS_REGION", "us-east-1"),
     aws_access_key_id=os.getenv("BEDROCK_AWS_ACCESS_KEY_ID"),
     aws_secret_access_key=os.getenv("BEDROCK_AWS_SECRET_ACCESS_KEY"),
+    config=Config(
+        retries={
+            "max_attempts": 6,
+            "mode": "adaptive"
+        }
+    )
 )
 
 # ----------------------------
@@ -65,7 +71,7 @@ llm = ChatBedrock(
     model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
     client=bedrock_client,
     temperature=0.7,
-    max_tokens=512,  # 安全範囲に抑える
+    max_tokens=512,  # 安全圏に調整
     model_kwargs={
         "system": """
 あなたはショッピングアシスタントです。店頭でお客様をお迎えするような気持ちで、親切で丁寧な対応をお願いします。
