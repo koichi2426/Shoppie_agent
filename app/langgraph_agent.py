@@ -5,6 +5,7 @@ import os
 import boto3
 import time
 import json
+import random
 from typing_extensions import Annotated, TypedDict
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
@@ -14,6 +15,25 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
 from langchain_aws import ChatBedrock
 from langgraph.checkpoint.memory import MemorySaver
+
+# ----------------------------
+# Claude用トークン数の概算カウント
+# ----------------------------
+def count_tokens(text: str) -> int:
+    # Claude 3 Haiku 想定で1単語≒1.5トークン換算（超簡易）
+    return int(len(text) / 4) + 1
+
+def truncate_messages(messages, max_tokens=1000):
+    total = 0
+    result = []
+    for m in reversed(messages):
+        tokens = count_tokens(m.content)
+        if total + tokens <= max_tokens:
+            result.insert(0, m)
+            total += tokens
+        else:
+            break
+    return result
 
 # ----------------------------
 # Yahoo API用のStructuredToolをインポート
@@ -45,7 +65,7 @@ llm = ChatBedrock(
     model=os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0"),
     client=bedrock_client,
     temperature=0.7,
-    max_tokens=1024,
+    max_tokens=512,  # 安全範囲に抑える
     model_kwargs={
         "system": """
 あなたはショッピングアシスタントです。店頭でお客様をお迎えするような気持ちで、親切で丁寧な対応をお願いします。
@@ -110,8 +130,11 @@ graph_app = build_graph()
 async def run_agent(user_input: str, thread_id: str = "default") -> dict:
     checkpoint = memory.get({"configurable": {"thread_id": thread_id}})
     past_messages = checkpoint.get("state", {}).get("messages", []) if checkpoint else []
-    human_messages = [m for m in past_messages if isinstance(m, HumanMessage)]
-    human_messages.append(HumanMessage(content=user_input))
+
+    # 🔒 トークン制限付きで履歴をトリミング
+    limited_past = truncate_messages(past_messages)
+    limited_past.append(HumanMessage(content=user_input))
+    human_messages = limited_past
 
     def run_with_retry():
         delay = 1
@@ -123,7 +146,7 @@ async def run_agent(user_input: str, thread_id: str = "default") -> dict:
                 ))
             except Exception as e:
                 if "ThrottlingException" in str(e):
-                    time.sleep(delay)
+                    time.sleep(delay + random.uniform(0, 0.5))
                     delay *= 2
                 else:
                     raise e
