@@ -6,13 +6,14 @@
 
 ## 概要
 
-Shoppie\_agentは、ユーザーの発言を自然言語で受け取り、LangChainとClaude 3.5 Haiku（Amazon Bedrock経由）を用いて、適切なツール実行と対話生成を行うエージェントです。楽天APIと連携し、商品情報の取得と応答を自動化します。
+Shoppie\_agentは、ユーザーの発言を自然言語で受け取り、LangChainとClaude 3.5 Haiku（Amazon Bedrock経由）を用いて、適切なツール実行と対話生成を行うエージェントです。APIと連携し、商品情報の取得と応答を自動化します。
 
 ---
 
 ## システム構成図
 
-![image](https://github.com/user-attachments/assets/5c0a99e9-f398-4b90-a4ea-ef56700a1ef0)
+![image](https://github.com/user-attachments/assets/4fbe94fe-6a06-4ca4-ac9a-145c60a2b8d0)
+
 
 ---
 
